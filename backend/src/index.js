@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -23,6 +24,12 @@ const RAIO_SUSPEITO_M = Number(process.env.RAIO_SUSPEITO_M || 15);
 // diferenciar entulhos a 10 m de distância com elas.
 const PRECISAO_MAXIMA_M = Number(process.env.PRECISAO_MAXIMA_M || 20);
 const MAX_FOTOS = 3;
+
+// Contra spam: quantos registros (novos ou confirmações) um cidadão pode
+// enviar por hora e por dia, e quantos registros falsos bloqueiam a conta.
+const LIMITE_REGISTROS_HORA = Number(process.env.LIMITE_REGISTROS_HORA || 5);
+const LIMITE_REGISTROS_DIA = Number(process.env.LIMITE_REGISTROS_DIA || 15);
+const DESCARTES_PARA_BLOQUEIO = Number(process.env.DESCARTES_PARA_BLOQUEIO || 3);
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.resolve('uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -47,6 +54,26 @@ const upload = multer({
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
+
+// Atrás de um proxy (nginx, load balancer), defina TRUST_PROXY=1 para que
+// o limite por IP use o IP real de quem acessa.
+if (process.env.TRUST_PROXY) app.set('trust proxy', Number(process.env.TRUST_PROXY));
+
+const limitePorIp = (max, minutos, mensagem, extra = {}) => rateLimit({
+  windowMs: minutos * 60 * 1000,
+  limit: max,
+  ...extra,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: mensagem, codigo: 'MUITAS_TENTATIVAS' },
+});
+
+// Evita criar contas em massa e testar senhas por força bruta.
+const limiteCadastro = limitePorIp(20, 60,
+  'Muitos cadastros feitos desta rede. Tente de novo mais tarde.');
+const limiteLogin = limitePorIp(10, 15,
+  'Muitas tentativas de login. Aguarde 15 minutos e tente de novo.',
+  { skipSuccessfulRequests: true });
 
 class ErroApi extends Error {
   constructor(status, mensagem, extra = {}) {
@@ -161,6 +188,37 @@ async function adicionarRegistro(client, denunciaId, usuarioId, pos, descricao, 
   }
 }
 
+// Recusa o envio se a conta estiver bloqueada ou passou do limite de registros.
+async function verificarSpam(usuarioId) {
+  const { rows } = await pool.query(
+    `SELECT u.bloqueado,
+            count(r.id) FILTER (WHERE r.criado_em > now() - interval '1 hour')::int AS na_hora,
+            count(r.id) FILTER (WHERE r.criado_em > now() - interval '1 day')::int AS no_dia
+     FROM usuarios u
+     LEFT JOIN registros r ON r.usuario_id = u.id AND r.criado_em > now() - interval '1 day'
+     WHERE u.id = $1
+     GROUP BY u.id`,
+    [usuarioId],
+  );
+  const conta = rows[0];
+  if (!conta) throw new ErroApi(401, 'Sessão expirada. Faça login novamente.');
+  if (conta.bloqueado) {
+    throw new ErroApi(403,
+      'Sua conta foi bloqueada por envio de registros falsos. Procure a Prefeitura de Palhoça.',
+      { codigo: 'CONTA_BLOQUEADA' });
+  }
+  if (conta.na_hora >= LIMITE_REGISTROS_HORA) {
+    throw new ErroApi(429,
+      `Você já enviou ${LIMITE_REGISTROS_HORA} registros na última hora. Tente de novo mais tarde.`,
+      { codigo: 'LIMITE_REGISTROS' });
+  }
+  if (conta.no_dia >= LIMITE_REGISTROS_DIA) {
+    throw new ErroApi(429,
+      `Você atingiu o limite de ${LIMITE_REGISTROS_DIA} registros por dia. Obrigado pela ajuda! Tente de novo amanhã.`,
+      { codigo: 'LIMITE_REGISTROS' });
+  }
+}
+
 async function emTransacao(fn) {
   const client = await pool.connect();
   try {
@@ -185,7 +243,7 @@ app.get('/', (req, res) => {
 
 // ---------------------------------------------------------------- Contas
 
-app.post('/auth/cadastro', rota(async (req, res) => {
+app.post('/auth/cadastro', limiteCadastro, rota(async (req, res) => {
   const nome = String(req.body.nome || '').trim();
   const cpf = limparCpf(req.body.cpf);
   const senha = String(req.body.senha || '');
@@ -207,7 +265,7 @@ app.post('/auth/cadastro', rota(async (req, res) => {
   res.status(201).json({ token: gerarToken(rows[0]), usuario: usuarioPublico(rows[0]) });
 }));
 
-app.post('/auth/login', rota(async (req, res) => {
+app.post('/auth/login', limiteLogin, rota(async (req, res) => {
   const cpf = limparCpf(req.body.cpf);
   const senha = String(req.body.senha || '');
 
@@ -215,6 +273,11 @@ app.post('/auth/login', rota(async (req, res) => {
   const usuario = rows[0];
   if (!usuario || !(await bcrypt.compare(senha, usuario.senha_hash))) {
     throw new ErroApi(401, 'CPF ou senha incorretos.');
+  }
+  if (usuario.bloqueado) {
+    throw new ErroApi(403,
+      'Sua conta foi bloqueada por envio de registros falsos. Procure a Prefeitura de Palhoça.',
+      { codigo: 'CONTA_BLOQUEADA' });
   }
   res.json({ token: gerarToken(usuario), usuario: usuarioPublico(usuario) });
 }));
@@ -248,6 +311,7 @@ app.post('/denuncias', exigirLogin, exigirPerfil('cidadao'), upload.array('fotos
     try {
       if (arquivos.length === 0) throw new ErroApi(400, 'Tire pelo menos 1 foto do entulho.');
       const pos = lerPosicao(req.body);
+      await verificarSpam(req.usuario.id);
       const descricao = String(req.body.ponto_referencia || '').trim().slice(0, 500) || null;
       const forcarNovo = req.body.forcar_novo === 'true';
 
@@ -289,6 +353,7 @@ app.post('/denuncias/:id/confirmar', exigirLogin, exigirPerfil('cidadao'), uploa
     const arquivos = req.files || [];
     try {
       const pos = lerPosicao(req.body);
+      await verificarSpam(req.usuario.id);
       const descricao = String(req.body.ponto_referencia || '').trim().slice(0, 500) || null;
       const id = Number(req.params.id);
 
@@ -325,6 +390,38 @@ app.patch('/denuncias/:id/recolher', exigirLogin, exigirPerfil('trabalhador'), r
   );
   if (rows.length === 0) throw new ErroApi(404, 'Este entulho já foi recolhido ou não existe.');
   res.json(await buscarDenuncia(pool, rows[0].id));
+}));
+
+// Trabalhador foi ao local e não encontrou entulho: o registro era falso.
+// Quem criou o registro ganha uma marcação; com DESCARTES_PARA_BLOQUEIO
+// marcações a conta é bloqueada e não consegue mais registrar.
+app.patch('/denuncias/:id/descartar', exigirLogin, exigirPerfil('trabalhador'), rota(async (req, res) => {
+  const resultado = await emTransacao(async (client) => {
+    const { rows } = await client.query(
+      `UPDATE denuncias
+       SET status = 'descartado', descartado_por = $2, descartado_em = now()
+       WHERE id = $1 AND status = 'ativo'
+       RETURNING id, criado_por`,
+      [Number(req.params.id), req.usuario.id],
+    );
+    if (rows.length === 0) throw new ErroApi(404, 'Este entulho já foi recolhido ou não existe.');
+
+    let autorBloqueado = false;
+    if (rows[0].criado_por) {
+      const { rows: bloqueio } = await client.query(
+        `UPDATE usuarios SET bloqueado = true
+         WHERE id = $1 AND perfil = 'cidadao' AND NOT bloqueado
+           AND (SELECT count(*) FROM denuncias
+                WHERE criado_por = $1 AND status = 'descartado') >= $2
+         RETURNING id`,
+        [rows[0].criado_por, DESCARTES_PARA_BLOQUEIO],
+      );
+      autorBloqueado = bloqueio.length > 0;
+    }
+    return { id: rows[0].id, autorBloqueado };
+  });
+
+  res.json({ ...(await buscarDenuncia(pool, resultado.id)), autor_bloqueado: resultado.autorBloqueado });
 }));
 
 // ---------------------------------------------------------------- Erros

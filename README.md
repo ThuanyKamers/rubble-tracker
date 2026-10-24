@@ -30,6 +30,19 @@ If several citizens report the same pile, the app must not create two records. B
 
 To keep this reliable, the app only allows sending when the GPS accuracy is **±20 m or better**, and it blocks mocked (fake) locations. Reports are processed one at a time on the server, so two people reporting the same spot at the same second still produce a single record. All distances are configurable.
 
+## Spam protection
+
+| Protection | How it works |
+|---|---|
+| Report limit | Each citizen can send at most 5 reports per hour and 15 per day (new reports and confirmations count) |
+| False reports | A worker who finds nothing at the location marks the report as false; after 3 false reports the citizen's account is blocked |
+| No deleting | Citizens cannot delete or edit a report after sending it; only workers can close it (collected or false) |
+| One account per person | Sign-up requires a valid CPF, and each CPF can only have one account |
+| Sign-up and login limits | At most 20 sign-ups per hour and 10 failed logins per 15 minutes from the same network |
+| Duplicates | Repeated reports of the same pile become confirmations, and each citizen can confirm a pile only once |
+
+Blocked accounts can be unblocked by the city with `npm run desbloquear-usuario -- <cpf>`. All limits are configurable in `backend/.env`.
+
 ## Tech stack
 
 | Layer | Technology |
@@ -100,6 +113,7 @@ flutter run --dart-define=API_URL=http://<your-pc-ip>:3000   # physical device o
 | `POST` | `/denuncias` (multipart, 1–3 photos) | citizen |
 | `POST` | `/denuncias/:id/confirmar` | citizen |
 | `PATCH` | `/denuncias/:id/recolher` | worker |
+| `PATCH` | `/denuncias/:id/descartar` | worker (false report) |
 
 ## Before going to production
 

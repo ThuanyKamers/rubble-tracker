@@ -38,7 +38,13 @@ export async function migrar() {
       ADD COLUMN IF NOT EXISTS criado_por INT REFERENCES usuarios(id),
       ADD COLUMN IF NOT EXISTS criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
       ADD COLUMN IF NOT EXISTS recolhido_por INT REFERENCES usuarios(id),
-      ADD COLUMN IF NOT EXISTS recolhido_em TIMESTAMPTZ;
+      ADD COLUMN IF NOT EXISTS recolhido_em TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS descartado_por INT REFERENCES usuarios(id),
+      ADD COLUMN IF NOT EXISTS descartado_em TIMESTAMPTZ;
+
+    -- Contas de quem enviou registros falsos várias vezes.
+    ALTER TABLE usuarios
+      ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN NOT NULL DEFAULT false;
 
     CREATE INDEX IF NOT EXISTS denuncias_status_lat_lng_idx
       ON denuncias (status, latitude, longitude);
@@ -55,6 +61,9 @@ export async function migrar() {
       criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
       UNIQUE (denuncia_id, usuario_id)
     );
+
+    CREATE INDEX IF NOT EXISTS registros_usuario_data_idx
+      ON registros (usuario_id, criado_em);
 
     CREATE TABLE IF NOT EXISTS fotos (
       id SERIAL PRIMARY KEY,
