@@ -10,7 +10,7 @@ A mobile app (Android & iOS) that connects citizens and city workers to keep str
 
 **Citizens**
 - Sign up with their CPF (Brazilian tax ID) and a password.
-- Report rubble by taking **1 to 3 photos on the spot** (camera only, no gallery) and adding an optional description such as *"in front of the dollar store"*.
+- Report rubble with **1 to 3 photos**, taken with the camera or chosen from the gallery, and an optional description such as *"in front of the dollar store"*.
 - The report is pinned on the map at the **exact GPS position** where it was made.
 
 **City workers**
