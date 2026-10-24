@@ -102,6 +102,52 @@ class _DetalhesDenunciaState extends State<_DetalhesDenuncia> {
     }
   }
 
+  Future<void> _descartar() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.report_gmailerrorred_rounded, color: Cores.entulho, size: 36),
+        title: const Text('Não encontrou o entulho?'),
+        content: const Text(
+          'O registro sai do mapa e conta como registro falso para o cidadão que enviou. '
+          'Depois de 3 registros falsos, a conta dele é bloqueada.\n\n'
+          'Use só se você foi ao local e não havia entulho.',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Cores.entulho,
+              minimumSize: const Size(120, 44),
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Marcar como falso'),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+
+    setState(() => _enviando = true);
+    try {
+      final autorBloqueado = await ApiService.descartarDenuncia(widget.denuncia.id);
+      if (!mounted) return;
+      mostrarAviso(
+        context,
+        autorBloqueado
+            ? 'A conta de quem registrou foi bloqueada por registros falsos.'
+            : 'Registro marcado como falso e removido do mapa.',
+        tipo: TipoAviso.info,
+      );
+      Navigator.pop(context, true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _enviando = false);
+      mostrarAviso(context, e.mensagem, tipo: TipoAviso.erro);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final denuncia = widget.denuncia;
@@ -125,7 +171,9 @@ class _DetalhesDenunciaState extends State<_DetalhesDenuncia> {
           Row(
             children: [
               _Etiqueta(
-                icone: denuncia.recolhida ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
+                icone: denuncia.recolhida
+                    ? Icons.check_circle_rounded
+                    : Icons.warning_amber_rounded,
                 texto: denuncia.recolhida ? 'Recolhido' : 'Aguardando coleta',
                 cor: denuncia.recolhida ? Cores.verde : Cores.entulho,
               ),
@@ -151,7 +199,8 @@ class _DetalhesDenunciaState extends State<_DetalhesDenuncia> {
           if (denuncia.criadoEm != null)
             _Linha(
               icone: Icons.schedule_rounded,
-              texto: 'Registrado ${tempoDesde(denuncia.criadoEm!)} '
+              texto:
+                  'Registrado ${tempoDesde(denuncia.criadoEm!)} '
                   '(${formatarData(denuncia.criadoEm!)})',
             ),
           _Linha(
@@ -172,6 +221,13 @@ class _DetalhesDenunciaState extends State<_DetalhesDenuncia> {
               onPressed: () => abrirRota(context, denuncia.coordenada),
               icon: const Icon(Icons.directions_rounded),
               label: const Text('Como chegar'),
+            ),
+            const SizedBox(height: 4),
+            TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: Cores.entulho),
+              onPressed: _enviando ? null : _descartar,
+              icon: const Icon(Icons.report_gmailerrorred_rounded),
+              label: const Text('Não encontrei / registro falso'),
             ),
           ] else
             OutlinedButton(
@@ -291,7 +347,10 @@ class _Etiqueta extends StatelessWidget {
         children: [
           Icon(icone, size: 16, color: cor),
           const SizedBox(width: 5),
-          Text(texto, style: TextStyle(color: cor, fontWeight: FontWeight.w700, fontSize: 13)),
+          Text(
+            texto,
+            style: TextStyle(color: cor, fontWeight: FontWeight.w700, fontSize: 13),
+          ),
         ],
       ),
     );
@@ -312,7 +371,9 @@ class _Linha extends StatelessWidget {
         children: [
           Icon(icone, size: 18, color: Cores.textoSuave),
           const SizedBox(width: 8),
-          Expanded(child: Text(texto, style: const TextStyle(color: Cores.textoSuave))),
+          Expanded(
+            child: Text(texto, style: const TextStyle(color: Cores.textoSuave)),
+          ),
         ],
       ),
     );

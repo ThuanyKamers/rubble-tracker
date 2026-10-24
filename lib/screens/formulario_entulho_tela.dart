@@ -10,9 +10,11 @@ import '../config.dart';
 import '../models/denuncia.dart';
 import '../services/api_service.dart';
 import '../services/localizacao.dart';
+import '../services/sessao.dart';
 import '../theme.dart';
 import '../widgets/foto_entulho.dart';
 import '../widgets/pino_mapa.dart';
+import 'login_tela.dart';
 
 // Formulário do cidadão. Ao salvar, devolve a Denuncia registrada (ou confirmada).
 class FormularioEntulhoTela extends StatefulWidget {
@@ -182,10 +184,50 @@ class _FormularioEntulhoTelaState extends State<FormularioEntulhoTela> {
       );
       if (mounted) Navigator.pop(context, resultado.denuncia);
     } on ApiException catch (e) {
-      if (mounted) mostrarAviso(context, e.mensagem, tipo: TipoAviso.erro);
+      if (!mounted) return;
+      if (e.contaBloqueada || e.limiteDeRegistros) {
+        await _avisarBloqueio(e);
+      } else {
+        mostrarAviso(context, e.mensagem, tipo: TipoAviso.erro);
+      }
     } finally {
       if (mounted) setState(() => _enviando = false);
     }
+  }
+
+  // Limite de registros atingido ou conta bloqueada por registros falsos.
+  // Conta bloqueada não pode mais usar o app, então volta para o login.
+  Future<void> _avisarBloqueio(ApiException e) async {
+    final bloqueada = e.contaBloqueada;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        icon: Icon(
+          bloqueada ? Icons.block_rounded : Icons.hourglass_top_rounded,
+          color: bloqueada ? Cores.entulho : Cores.alerta,
+          size: 36,
+        ),
+        title: Text(bloqueada ? 'Conta bloqueada' : 'Limite de registros'),
+        content: Text(e.mensagem, textAlign: TextAlign.center),
+        actions: [
+          FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size(120, 44)),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Entendi'),
+          ),
+        ],
+      ),
+    );
+    if (!bloqueada || !mounted) return;
+
+    await Sessao.sair();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginTela()),
+      (_) => false,
+    );
   }
 
   // Envia o registro. Se o servidor achar um entulho muito perto, pergunta ao
@@ -534,6 +576,20 @@ class _FormularioEntulhoTelaState extends State<FormularioEntulhoTela> {
             decoration: const InputDecoration(
               hintText: 'Ex.: Na frente da loja de 10, ao lado da clínica.',
             ),
+          ),
+          const SizedBox(height: 8),
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.shield_outlined, size: 18, color: Cores.textoSuave),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Limite de 5 registros por hora. Registros falsos bloqueiam a conta.',
+                  style: TextStyle(fontSize: 13, color: Cores.textoSuave),
+                ),
+              ),
+            ],
           ),
         ],
       ),
