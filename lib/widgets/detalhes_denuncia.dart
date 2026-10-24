@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/denuncia.dart';
 import '../services/api_service.dart';
 import '../services/sessao.dart';
+import '../theme.dart';
 import 'foto_entulho.dart';
 
 String formatarData(DateTime d) {
@@ -10,23 +13,51 @@ String formatarData(DateTime d) {
   return '${dois(d.day)}/${dois(d.month)}/${d.year} às ${dois(d.hour)}:${dois(d.minute)}';
 }
 
+// "há 5 min", "há 2 h", "há 3 dias" ou a data, para datas mais antigas.
+String tempoDesde(DateTime d) {
+  final dif = DateTime.now().difference(d);
+  if (dif.inMinutes < 1) return 'agora mesmo';
+  if (dif.inMinutes < 60) return 'há ${dif.inMinutes} min';
+  if (dif.inHours < 24) return 'há ${dif.inHours} h';
+  if (dif.inDays < 7) return dif.inDays == 1 ? 'há 1 dia' : 'há ${dif.inDays} dias';
+  return formatarData(d).split(' às ').first;
+}
+
+String formatarDistancia(double metros) =>
+    metros < 1000 ? '${metros.round()} m' : '${(metros / 1000).toStringAsFixed(1)} km';
+
+// Abre a rota até o entulho no Google Maps (ou no navegador).
+Future<void> abrirRota(BuildContext context, LatLng destino) async {
+  final url = Uri.parse(
+    'https://www.google.com/maps/dir/?api=1'
+    '&destination=${destino.latitude},${destino.longitude}&travelmode=driving',
+  );
+  final abriu = await launchUrl(url, mode: LaunchMode.externalApplication);
+  if (!abriu && context.mounted) {
+    mostrarAviso(context, 'Não foi possível abrir o mapa.', tipo: TipoAviso.erro);
+  }
+}
+
 // Abre os detalhes de um entulho. Devolve true se o trabalhador marcou como recolhido.
-Future<bool> exibirDetalhesDenuncia(BuildContext context, Denuncia denuncia) async {
+Future<bool> exibirDetalhesDenuncia(
+  BuildContext context,
+  Denuncia denuncia, {
+  LatLng? origem,
+}) async {
   final recolhido = await showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (context) => _DetalhesDenuncia(denuncia: denuncia),
+    useSafeArea: true,
+    builder: (context) => _DetalhesDenuncia(denuncia: denuncia, origem: origem),
   );
   return recolhido ?? false;
 }
 
 class _DetalhesDenuncia extends StatefulWidget {
   final Denuncia denuncia;
+  final LatLng? origem;
 
-  const _DetalhesDenuncia({required this.denuncia});
+  const _DetalhesDenuncia({required this.denuncia, this.origem});
 
   @override
   State<_DetalhesDenuncia> createState() => _DetalhesDenunciaState();
@@ -34,16 +65,25 @@ class _DetalhesDenuncia extends StatefulWidget {
 
 class _DetalhesDenunciaState extends State<_DetalhesDenuncia> {
   bool _enviando = false;
+  int _fotoAtual = 0;
 
   Future<void> _marcarRecolhido() async {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Marcar como recolhido?'),
-        content: const Text('O entulho vai sair do mapa para todos.'),
+        icon: const Icon(Icons.task_alt_rounded, color: Cores.verde, size: 36),
+        title: const Text('Entulho recolhido?'),
+        content: const Text(
+          'Ele vai sair do mapa para todos os cidadãos e da lista da equipe.',
+          textAlign: TextAlign.center,
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Recolhido')),
+          FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size(120, 44)),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sim, recolhi'),
+          ),
         ],
       ),
     );
@@ -53,16 +93,12 @@ class _DetalhesDenunciaState extends State<_DetalhesDenuncia> {
     try {
       await ApiService.marcarRecolhido(widget.denuncia.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Entulho marcado como recolhido.'), backgroundColor: Colors.green),
-      );
+      mostrarAviso(context, 'Pronto! Entulho marcado como recolhido.', tipo: TipoAviso.sucesso);
       Navigator.pop(context, true);
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _enviando = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.mensagem), backgroundColor: Colors.red),
-      );
+      mostrarAviso(context, e.mensagem, tipo: TipoAviso.erro);
     }
   }
 
@@ -70,106 +106,214 @@ class _DetalhesDenunciaState extends State<_DetalhesDenuncia> {
   Widget build(BuildContext context) {
     final denuncia = widget.denuncia;
     final ehTrabalhador = Sessao.usuario?.ehTrabalhador ?? false;
+    final distancia = widget.origem == null
+        ? null
+        : const Distance()(widget.origem!, denuncia.coordenada);
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  denuncia.recolhida ? Icons.check_circle : Icons.warning_amber_rounded,
-                  color: denuncia.recolhida ? Colors.green : Colors.redAccent,
-                  size: 28,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  denuncia.recolhida ? 'Entulho recolhido' : 'Entulho para recolher',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (denuncia.criadoEm != null)
-              Text(
-                'Registrado em ${formatarData(denuncia.criadoEm!)}',
-                style: const TextStyle(color: Colors.black54),
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewPaddingOf(context).bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _Carrossel(
+            fotos: denuncia.caminhosFotos,
+            atual: _fotoAtual,
+            onMudou: (i) => setState(() => _fotoAtual = i),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _Etiqueta(
+                icone: denuncia.recolhida ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
+                texto: denuncia.recolhida ? 'Recolhido' : 'Aguardando coleta',
+                cor: denuncia.recolhida ? Cores.verde : Cores.entulho,
               ),
-            if (denuncia.confirmacoes > 1)
-              Text(
-                'Confirmado por ${denuncia.confirmacoes} cidadãos',
-                style: const TextStyle(color: Colors.black54),
-              ),
-            const SizedBox(height: 15),
-            const Text(
-              'Descrição / Ponto de Referência:',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
+              const SizedBox(width: 8),
+              if (distancia != null)
+                _Etiqueta(
+                  icone: Icons.near_me_rounded,
+                  texto: formatarDistancia(distancia),
+                  cor: Cores.azul,
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            denuncia.pontoReferencia.isEmpty ? 'Sem ponto de referência' : denuncia.pontoReferencia,
+            style: TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+              color: denuncia.pontoReferencia.isEmpty ? Cores.textoSuave : Cores.texto,
             ),
-            const SizedBox(height: 5),
-            Text(
-              denuncia.pontoReferencia.isEmpty ? 'Sem ponto de referência' : denuncia.pontoReferencia,
-              style: const TextStyle(fontSize: 16),
+          ),
+          const SizedBox(height: 12),
+          if (denuncia.criadoEm != null)
+            _Linha(
+              icone: Icons.schedule_rounded,
+              texto: 'Registrado ${tempoDesde(denuncia.criadoEm!)} '
+                  '(${formatarData(denuncia.criadoEm!)})',
             ),
-            const SizedBox(height: 15),
-            const Text(
-              'Fotos:',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
+          _Linha(
+            icone: Icons.groups_rounded,
+            texto: denuncia.confirmacoes > 1
+                ? 'Confirmado por ${denuncia.confirmacoes} cidadãos'
+                : 'Registrado por 1 cidadão',
+          ),
+          const SizedBox(height: 20),
+          if (ehTrabalhador && !denuncia.recolhida) ...[
+            FilledButton.icon(
+              onPressed: _enviando ? null : _marcarRecolhido,
+              icon: _enviando ? const CarregandoBotao() : const Icon(Icons.task_alt_rounded),
+              label: const Text('Marcar como recolhido'),
             ),
             const SizedBox(height: 10),
-            if (denuncia.caminhosFotos.isEmpty)
-              const Text('Nenhuma foto anexada.', style: TextStyle(color: Colors.black45))
-            else
-              SizedBox(
-                height: 140,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: denuncia.caminhosFotos.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 10),
-                  itemBuilder: (context, index) {
-                    final foto = denuncia.caminhosFotos[index];
-                    return GestureDetector(
-                      onTap: () => abrirFotoEmTelaCheia(context, foto),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: SizedBox(width: 140, child: FotoEntulho(foto)),
+            OutlinedButton.icon(
+              onPressed: () => abrirRota(context, denuncia.coordenada),
+              icon: const Icon(Icons.directions_rounded),
+              label: const Text('Como chegar'),
+            ),
+          ] else
+            OutlinedButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Fechar'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Carrossel extends StatelessWidget {
+  final List<String> fotos;
+  final int atual;
+  final ValueChanged<int> onMudou;
+
+  const _Carrossel({required this.fotos, required this.atual, required this.onMudou});
+
+  @override
+  Widget build(BuildContext context) {
+    if (fotos.isEmpty) {
+      return Container(
+        height: 140,
+        decoration: BoxDecoration(color: Cores.fundo, borderRadius: BorderRadius.circular(18)),
+        child: const Center(
+          child: Text('Nenhuma foto anexada.', style: TextStyle(color: Cores.textoSuave)),
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        height: 230,
+        child: Stack(
+          children: [
+            PageView.builder(
+              itemCount: fotos.length,
+              onPageChanged: onMudou,
+              itemBuilder: (context, i) => GestureDetector(
+                onTap: () => abrirFotoEmTelaCheia(context, fotos[i]),
+                child: Hero(
+                  tag: fotos[i],
+                  child: Container(color: Cores.fundo, child: FotoEntulho(fotos[i])),
+                ),
+              ),
+            ),
+            if (fotos.length > 1)
+              Positioned(
+                bottom: 10,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(fotos.length, (i) {
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: i == atual ? 18 : 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: i == atual ? Colors.white : Colors.white70,
+                        borderRadius: BorderRadius.circular(4),
+                        boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 3)],
                       ),
                     );
-                  },
+                  }),
                 ),
               ),
-            const SizedBox(height: 20),
-            if (ehTrabalhador && !denuncia.recolhida)
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  onPressed: _enviando ? null : _marcarRecolhido,
-                  icon: _enviando
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.check),
-                  label: const Text('Marcar como recolhido', style: TextStyle(fontSize: 16)),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-              )
-            else
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Fechar'),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.zoom_out_map_rounded, size: 14, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${atual + 1}/${fotos.length}',
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ],
                 ),
               ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _Etiqueta extends StatelessWidget {
+  final IconData icone;
+  final String texto;
+  final Color cor;
+
+  const _Etiqueta({required this.icone, required this.texto, required this.cor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: cor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icone, size: 16, color: cor),
+          const SizedBox(width: 5),
+          Text(texto, style: TextStyle(color: cor, fontWeight: FontWeight.w700, fontSize: 13)),
+        ],
+      ),
+    );
+  }
+}
+
+class _Linha extends StatelessWidget {
+  final IconData icone;
+  final String texto;
+
+  const _Linha({required this.icone, required this.texto});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(icone, size: 18, color: Cores.textoSuave),
+          const SizedBox(width: 8),
+          Expanded(child: Text(texto, style: const TextStyle(color: Cores.textoSuave))),
+        ],
       ),
     );
   }

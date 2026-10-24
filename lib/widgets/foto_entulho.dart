@@ -34,6 +34,13 @@ class FotoEntulho extends StatelessWidget {
         caminho,
         fit: fit,
         errorBuilder: (_, _, _) => quebrada,
+        frameBuilder: (context, child, frame, sincrono) => sincrono
+            ? child
+            : AnimatedOpacity(
+                opacity: frame == null ? 0 : 1,
+                duration: const Duration(milliseconds: 250),
+                child: child,
+              ),
         loadingBuilder: (context, child, progresso) => progresso == null
             ? child
             : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
@@ -54,7 +61,10 @@ void abrirFotoEmTelaCheia(BuildContext context, String caminho) {
           iconTheme: const IconThemeData(color: Colors.white),
         ),
         body: InteractiveViewer(
-          child: Center(child: FotoEntulho(caminho, fit: BoxFit.contain)),
+          maxScale: 5,
+          child: Center(
+            child: Hero(tag: caminho, child: FotoEntulho(caminho, fit: BoxFit.contain)),
+          ),
         ),
       ),
     ),

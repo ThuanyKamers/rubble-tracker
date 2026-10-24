@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 import '../services/api_service.dart';
+import '../theme.dart';
 import '../utils/cpf.dart';
+import '../widgets/layout_entrada.dart';
 import 'cadastro_tela.dart';
 import 'mapa_tela.dart';
 
@@ -20,8 +22,10 @@ class LoginTela extends StatefulWidget {
 }
 
 class _LoginTelaState extends State<LoginTela> {
+  final _formKey = GlobalKey<FormState>();
   final _cpfController = TextEditingController();
   final _senhaController = TextEditingController();
+  final _senhaFoco = FocusNode();
   bool _entrando = false;
   bool _mostrarSenha = false;
 
@@ -29,24 +33,17 @@ class _LoginTelaState extends State<LoginTela> {
   void dispose() {
     _cpfController.dispose();
     _senhaController.dispose();
+    _senhaFoco.dispose();
     super.dispose();
   }
 
-  void _erro(String mensagem) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensagem), backgroundColor: Colors.red),
-    );
-  }
-
   Future<void> _entrar() async {
-    final cpf = _cpfController.text;
-    final senha = _senhaController.text;
-    if (cpf.isEmpty || senha.isEmpty) return _erro('Por favor, preencha o CPF e a senha.');
-    if (!cpfValido(cpf)) return _erro('CPF inválido.');
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _entrando = true);
     try {
-      await ApiService.login(cpf, senha);
+      await ApiService.login(_cpfController.text, _senhaController.text);
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
@@ -55,120 +52,140 @@ class _LoginTelaState extends State<LoginTela> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _entrando = false);
-      _erro(e.mensagem);
+      mostrarAviso(context, e.mensagem, tipo: TipoAviso.erro);
     }
+  }
+
+  void _esqueciSenha() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.support_agent_rounded, color: Cores.verde, size: 36),
+        title: const Text('Esqueceu a senha?'),
+        content: const Text(
+          'Procure o atendimento da Prefeitura de Palhoça para redefinir sua senha.',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendi')),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Center(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+    return LayoutEntrada(
+      titulo: 'Bem-vindo(a)!',
+      subtitulo: 'Entre com seu CPF para registrar ou recolher entulhos.',
+      child: Form(
+        key: _formKey,
+        child: AutofillGroup(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                controller: _cpfController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [cpfFormatter],
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.username],
+                onFieldSubmitted: (_) => _senhaFoco.requestFocus(),
+                decoration: const InputDecoration(
+                  labelText: 'CPF',
+                  hintText: '000.000.000-00',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                ),
+                validator: (v) {
+                  if ((v ?? '').isEmpty) return 'Informe seu CPF.';
+                  return cpfValido(v!) ? null : 'CPF inválido. Confira os números.';
+                },
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _senhaController,
+                focusNode: _senhaFoco,
+                obscureText: !_mostrarSenha,
+                textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.password],
+                onFieldSubmitted: (_) => _entrar(),
+                decoration: InputDecoration(
+                  labelText: 'Senha',
+                  prefixIcon: const Icon(Icons.lock_outline_rounded),
+                  suffixIcon: IconButton(
+                    tooltip: _mostrarSenha ? 'Esconder senha' : 'Mostrar senha',
+                    icon: Icon(_mostrarSenha ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+                    onPressed: () => setState(() => _mostrarSenha = !_mostrarSenha),
+                  ),
+                ),
+                validator: (v) => (v ?? '').isEmpty ? 'Informe sua senha.' : null,
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: _esqueciSenha,
+                  child: const Text('Esqueci minha senha'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              FilledButton(
+                onPressed: _entrando ? null : _entrar,
+                child: _entrando ? const CarregandoBotao() : const Text('Entrar'),
+              ),
+              const SizedBox(height: 28),
+              const Row(
                 children: [
-                  const Icon(Icons.location_on, size: 80, color: Colors.green),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Cidade Limpa',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.green),
+                  Expanded(child: Divider()),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('Primeira vez aqui?', style: TextStyle(color: Cores.textoSuave)),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Faça login com o CPF',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 40),
-                  TextField(
-                    controller: _cpfController,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [cpfFormatter],
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: 'CPF',
-                      hintText: '000.000.000-00',
-                      prefixIcon: const Icon(Icons.person),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _senhaController,
-                    obscureText: !_mostrarSenha,
-                    onSubmitted: (_) => _entrar(),
-                    decoration: InputDecoration(
-                      labelText: 'Senha',
-                      prefixIcon: const Icon(Icons.lock),
-                      suffixIcon: IconButton(
-                        icon: Icon(_mostrarSenha ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setState(() => _mostrarSenha = !_mostrarSenha),
-                      ),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => showDialog<void>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Esqueci minha senha'),
-                          content: const Text(
-                            'Procure o atendimento da Prefeitura de Palhoça para redefinir sua senha.',
-                          ),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Ok')),
-                          ],
-                        ),
-                      ),
-                      child: const Text('Esqueci minha senha', style: TextStyle(color: Colors.green)),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _entrando ? null : _entrar,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: _entrando
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Text('Entrar', style: TextStyle(fontSize: 18, color: Colors.white)),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text('Não tem uma conta? '),
-                      GestureDetector(
-                        onTap: () => Navigator.push(
+                  Expanded(child: Divider()),
+                ],
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: _entrando
+                    ? null
+                    : () => Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const CadastroTela()),
                         ),
-                        child: const Text(
-                          'Cadastrar-se',
-                          style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                icon: const Icon(Icons.person_add_alt_1_rounded),
+                label: const Text('Criar conta de cidadão'),
               ),
-            ),
+              const SizedBox(height: 20),
+              const _AvisoTrabalhador(),
+            ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AvisoTrabalhador extends StatelessWidget {
+  const _AvisoTrabalhador();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Cores.verdeClaro,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.engineering_rounded, color: Cores.verde),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'É da equipe de coleta? Use o CPF e a senha que a prefeitura cadastrou para você.',
+              style: TextStyle(color: Cores.verdeEscuro, fontSize: 13.5),
+            ),
+          ),
+        ],
       ),
     );
   }

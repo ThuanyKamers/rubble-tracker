@@ -9,7 +9,14 @@ void main() {
 
     expect(find.text('Cidade Limpa'), findsOneWidget);
     expect(find.text('Entrar'), findsOneWidget);
-    expect(find.text('Cadastrar-se'), findsOneWidget);
+    expect(find.text('Criar conta de cidadão'), findsOneWidget);
+  });
+
+  testWidgets('Na primeira vez, mostra a apresentação', (WidgetTester tester) async {
+    await tester.pumpWidget(const CidadeLimpaApp(viuIntroducao: false));
+
+    expect(find.text('Viu entulho na rua?'), findsOneWidget);
+    expect(find.text('Próximo'), findsOneWidget);
   });
 
   test('Validação de CPF', () {

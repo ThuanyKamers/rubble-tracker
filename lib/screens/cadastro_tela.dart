@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../theme.dart';
 import '../utils/cpf.dart';
+import '../widgets/layout_entrada.dart';
 import 'login_tela.dart';
 import 'mapa_tela.dart';
 
@@ -19,6 +21,7 @@ class _CadastroTelaState extends State<CadastroTela> {
   final _cpfController = TextEditingController();
   final _senhaController = TextEditingController();
   bool _enviando = false;
+  bool _mostrarSenha = false;
 
   @override
   void dispose() {
@@ -29,16 +32,22 @@ class _CadastroTelaState extends State<CadastroTela> {
   }
 
   Future<void> _cadastrar() async {
+    FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _enviando = true);
     try {
-      await ApiService.cadastrar(
+      final usuario = await ApiService.cadastrar(
         _nomeController.text.trim(),
         _cpfController.text,
         _senhaController.text,
       );
       if (!mounted) return;
+      mostrarAviso(
+        context,
+        'Conta criada! Bem-vindo(a), ${usuario.nome.split(' ').first}.',
+        tipo: TipoAviso.sucesso,
+      );
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const MapaTela()),
@@ -47,89 +56,92 @@ class _CadastroTelaState extends State<CadastroTela> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _enviando = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.mensagem), backgroundColor: Colors.red),
-      );
+      mostrarAviso(context, e.mensagem, tipo: TipoAviso.erro);
     }
   }
 
-  InputDecoration _campo(String rotulo, IconData icone) => InputDecoration(
-        labelText: rotulo,
-        prefixIcon: Icon(icone),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      );
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Criar conta', style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.green,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextFormField(
-                  controller: _nomeController,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: _campo('Nome completo', Icons.badge),
-                  validator: (v) => (v ?? '').trim().length < 3 ? 'Informe seu nome completo.' : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _cpfController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [cpfFormatter],
-                  decoration: _campo('CPF', Icons.person),
-                  validator: (v) => cpfValido(v ?? '') ? null : 'CPF inválido.',
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _senhaController,
-                  obscureText: true,
-                  decoration: _campo('Senha', Icons.lock),
-                  validator: (v) =>
-                      (v ?? '').length < 6 ? 'A senha precisa ter pelo menos 6 caracteres.' : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  obscureText: true,
-                  decoration: _campo('Repita a senha', Icons.lock_outline),
-                  validator: (v) => v != _senhaController.text ? 'As senhas não são iguais.' : null,
-                ),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: _enviando ? null : _cadastrar,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: _enviando
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Text('Cadastrar', style: TextStyle(fontSize: 18, color: Colors.white)),
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () => Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => const LoginTela()),
-                  ),
-                  child: const Text('Já tenho conta', style: TextStyle(color: Colors.green)),
-                ),
-              ],
+    final iconeSenha = IconButton(
+      tooltip: _mostrarSenha ? 'Esconder senha' : 'Mostrar senha',
+      icon: Icon(_mostrarSenha ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+      onPressed: () => setState(() => _mostrarSenha = !_mostrarSenha),
+    );
+
+    return LayoutEntrada(
+      mostrarVoltar: true,
+      titulo: 'Criar conta',
+      subtitulo: 'Leva menos de um minuto. Depois é só fotografar o entulho.',
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextFormField(
+              controller: _nomeController,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.next,
+              autofillHints: const [AutofillHints.name],
+              decoration: const InputDecoration(
+                labelText: 'Nome completo',
+                prefixIcon: Icon(Icons.person_outline_rounded),
+              ),
+              validator: (v) => (v ?? '').trim().length < 3 ? 'Informe seu nome completo.' : null,
             ),
-          ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _cpfController,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.next,
+              inputFormatters: [cpfFormatter],
+              decoration: const InputDecoration(
+                labelText: 'CPF',
+                hintText: '000.000.000-00',
+                prefixIcon: Icon(Icons.badge_outlined),
+              ),
+              validator: (v) => cpfValido(v ?? '') ? null : 'CPF inválido. Confira os números.',
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              controller: _senhaController,
+              obscureText: !_mostrarSenha,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                labelText: 'Senha',
+                helperText: 'Pelo menos 6 caracteres',
+                prefixIcon: const Icon(Icons.lock_outline_rounded),
+                suffixIcon: iconeSenha,
+              ),
+              validator: (v) =>
+                  (v ?? '').length < 6 ? 'A senha precisa ter pelo menos 6 caracteres.' : null,
+            ),
+            const SizedBox(height: 14),
+            TextFormField(
+              obscureText: !_mostrarSenha,
+              textInputAction: TextInputAction.done,
+              onFieldSubmitted: (_) => _cadastrar(),
+              decoration: const InputDecoration(
+                labelText: 'Repita a senha',
+                prefixIcon: Icon(Icons.lock_reset_rounded),
+              ),
+              validator: (v) => v != _senhaController.text ? 'As senhas não são iguais.' : null,
+            ),
+            const SizedBox(height: 28),
+            FilledButton(
+              onPressed: _enviando ? null : _cadastrar,
+              child: _enviando ? const CarregandoBotao() : const Text('Criar minha conta'),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: _enviando
+                  ? null
+                  : () => Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => const LoginTela()),
+                      ),
+              child: const Text('Já tenho conta. Entrar'),
+            ),
+          ],
         ),
       ),
     );
