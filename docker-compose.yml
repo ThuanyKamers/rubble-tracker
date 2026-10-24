@@ -1,0 +1,26 @@
+# Reads credentials from backend/.env (copy backend/.env.example first).
+services:
+  database:
+    image: postgres:16-alpine
+    restart: always
+    env_file: ./backend/.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build: ./backend
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file: ./backend/.env
+    environment:
+      POSTGRES_HOST: database
+      UPLOAD_DIR: /usr/src/app/uploads
+    volumes:
+      - photos:/usr/src/app/uploads
+    depends_on:
+      - database
+
+volumes:
+  postgres_data:
+  photos:

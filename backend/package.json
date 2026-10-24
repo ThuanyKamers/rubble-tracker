@@ -1,0 +1,21 @@
+{
+  "name": "rubble-tracker-backend",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "criar-trabalhador": "node --env-file-if-exists=.env src/criar-trabalhador.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.5.0",
+    "pg": "^8.11.5"
+  },
+  "engines": {
+    "node": ">=22.9"
+  }
+}
