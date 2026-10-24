@@ -27,7 +27,7 @@ class _IntroducaoTelaState extends State<IntroducaoTela> {
     (
       icone: Icons.photo_camera_rounded,
       titulo: 'Viu entulho na rua?',
-      texto: 'Tire até 3 fotos na hora e conte um ponto de referência, '
+      texto: 'Tire ou escolha até 3 fotos e conte um ponto de referência, '
           'como "na frente da loja de 10".',
     ),
     (

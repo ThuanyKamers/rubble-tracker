@@ -90,22 +90,72 @@ class _FormularioEntulhoTelaState extends State<FormularioEntulhoTela> {
 
   bool get _podeEnviar => _fotosLista.isNotEmpty && _gpsPronto && !_enviando;
 
-  Future<void> _tirarFoto() async {
-    if (_fotosLista.length >= _maxFotos) {
+  // Pergunta se a foto vem da câmera ou da galeria.
+  Future<void> _adicionarFoto() async {
+    final restantes = _maxFotos - _fotosLista.length;
+    if (restantes <= 0) {
       mostrarAviso(context, 'Você já adicionou as 3 fotos.');
       return;
     }
 
-    // Só câmera: a foto precisa ser tirada na hora, no local.
-    final XFile? fotoTirada = await _picker.pickImage(
-      source: ImageSource.camera,
-      preferredCameraDevice: CameraDevice.rear,
-      maxWidth: 1920,
-      imageQuality: 70,
+    final origem = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Adicionar foto',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              _OpcaoFoto(
+                icone: Icons.photo_camera_rounded,
+                titulo: 'Tirar foto agora',
+                subtitulo: 'Use a câmera do celular',
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              const SizedBox(height: 10),
+              _OpcaoFoto(
+                icone: Icons.photo_library_rounded,
+                titulo: 'Escolher da galeria',
+                subtitulo: restantes == 1 ? 'Selecione 1 foto' : 'Selecione até $restantes fotos',
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
-    if (fotoTirada != null && mounted) {
-      setState(() => _fotosLista.add(fotoTirada));
+    if (origem == null || !mounted) return;
+
+    final List<XFile> novas;
+    if (origem == ImageSource.camera) {
+      final foto = await _picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+        maxWidth: 1920,
+        imageQuality: 70,
+      );
+      novas = [?foto];
+    } else if (restantes == 1) {
+      final foto = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        imageQuality: 70,
+      );
+      novas = [?foto];
+    } else {
+      novas = await _picker.pickMultiImage(maxWidth: 1920, imageQuality: 70, limit: restantes);
     }
+    if (novas.isEmpty || !mounted) return;
+
+    if (novas.length > restantes) {
+      mostrarAviso(context, 'Só cabem mais $restantes foto(s). As outras foram ignoradas.');
+    }
+    setState(() => _fotosLista.addAll(novas.take(restantes)));
   }
 
   Future<void> _enviar() async {
@@ -267,7 +317,7 @@ class _FormularioEntulhoTelaState extends State<FormularioEntulhoTela> {
                     child: InkWell(
                       onTap: temFoto
                           ? () => abrirFotoEmTelaCheia(context, _fotosLista[index].path)
-                          : _tirarFoto,
+                          : _adicionarFoto,
                       child: temFoto
                           ? FotoEntulho(_fotosLista[index].path)
                           : Column(
@@ -281,7 +331,7 @@ class _FormularioEntulhoTelaState extends State<FormularioEntulhoTela> {
                                 if (ehProxima) ...[
                                   const SizedBox(height: 6),
                                   Text(
-                                    index == 0 ? 'Tirar foto' : 'Mais uma',
+                                    index == 0 ? 'Adicionar' : 'Mais uma',
                                     style: const TextStyle(
                                       color: Cores.verde,
                                       fontWeight: FontWeight.w700,
@@ -453,7 +503,7 @@ class _FormularioEntulhoTelaState extends State<FormularioEntulhoTela> {
           _Passo(
             numero: 1,
             titulo: 'Fotos do entulho',
-            subtitulo: 'Tire de 1 a 3 fotos na hora, no local.',
+            subtitulo: 'Tire na hora ou escolha da galeria (1 a 3 fotos).',
             feito: _fotosLista.isNotEmpty,
           ),
           const SizedBox(height: 12),
@@ -568,6 +618,38 @@ class _Passo extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _OpcaoFoto extends StatelessWidget {
+  final IconData icone;
+  final String titulo;
+  final String subtitulo;
+  final VoidCallback onTap;
+
+  const _OpcaoFoto({
+    required this.icone,
+    required this.titulo,
+    required this.subtitulo,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        leading: CircleAvatar(
+          backgroundColor: Cores.verdeClaro,
+          child: Icon(icone, color: Cores.verde),
+        ),
+        title: Text(titulo, style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(subtitulo),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: onTap,
+      ),
     );
   }
 }

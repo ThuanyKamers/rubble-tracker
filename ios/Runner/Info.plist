@@ -7,7 +7,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Sua localização marca no mapa o ponto exato onde está o entulho.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>As fotos do entulho são tiradas com a câmera no momento do registro.</string>
+	<string>Você pode escolher fotos do entulho da sua galeria para anexar ao registro.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
