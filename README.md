@@ -4,6 +4,8 @@ A mobile app (Android & iOS) that connects citizens and city workers to keep str
 
 > The app interface is in Brazilian Portuguese ("Cidade Limpa").
 
+📄 **Full documentation** (English, Deutsch, Português): [Rubble Tracker on Notion](https://app.notion.com/p/4033f2d9e43b80ec8bb6cf9546658e61)
+
 ## How it works
 
 **Citizens**
