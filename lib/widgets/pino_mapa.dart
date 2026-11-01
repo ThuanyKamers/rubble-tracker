@@ -24,12 +24,21 @@ class PinoEntulho extends StatelessWidget {
         clipBehavior: Clip.none,
         alignment: Alignment.topCenter,
         children: [
-          const Icon(
-            Icons.location_on,
-            size: 56,
-            color: Cores.entulho,
-            shadows: [Shadow(color: Colors.black38, blurRadius: 6, offset: Offset(0, 2))],
+          // Sombra no chão, embaixo da ponta do alfinete. Não usamos sombra no
+          // próprio ícone: em alguns aparelhos ela fica "fantasma" e acompanha
+          // o mapa enquanto ele é arrastado.
+          Positioned(
+            top: 46,
+            child: Container(
+              width: 16,
+              height: 6,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.25),
+                borderRadius: const BorderRadius.all(Radius.elliptical(8, 3)),
+              ),
+            ),
           ),
+          const Icon(Icons.location_on, size: 56, color: Cores.entulho),
           Positioned(
             top: 9,
             child: Container(
