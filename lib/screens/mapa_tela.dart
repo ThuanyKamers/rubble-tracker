@@ -625,7 +625,7 @@ class _PainelMaisProximo extends StatelessWidget {
     final descricao = maisProximo.pontoReferencia.isEmpty ? 'Sem descrição' : maisProximo.pontoReferencia;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 16 + MediaQuery.viewPaddingOf(context).bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -2,9 +2,9 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/denuncia.dart';
 
-// Quantas paradas cabem numa rota do Google Maps aberta por link
-// (destino + até 8 paradas no caminho).
-const maxParadasRota = 9;
+// Quantas paradas cabem numa rota do Google Maps aberta por link no celular:
+// o app aceita só 3 paradas no caminho (com mais, ele ignora todas) + o destino.
+const maxParadasRota = 4;
 
 const _distancia = Distance();
 
