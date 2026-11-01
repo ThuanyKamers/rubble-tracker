@@ -9,6 +9,7 @@ import '../config.dart';
 import '../models/denuncia.dart';
 import '../services/api_service.dart';
 import '../services/localizacao.dart';
+import '../services/mapa_provedor.dart';
 import '../services/sessao.dart';
 import '../theme.dart';
 import '../widgets/detalhes_denuncia.dart';
@@ -230,13 +231,7 @@ class _MapaTelaState extends State<MapaTela> {
               },
             ),
             children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.cidadelimpa.app',
-                maxNativeZoom: 19,
-                keepBuffer: 4,
-                panBuffer: 1,
-              ),
+              const CamadaMapa(keepBuffer: 4, panBuffer: 1),
               MarkerLayer(
                 markers: [
                   if (_posicaoUsuario != null)
@@ -250,11 +245,7 @@ class _MapaTelaState extends State<MapaTela> {
                   ..._denuncias.map(_marcador),
                 ],
               ),
-              const RichAttributionWidget(
-                alignment: AttributionAlignment.bottomLeft,
-                showFlutterMapAttribution: false,
-                attributions: [TextSourceAttribution('OpenStreetMap contributors')],
-              ),
+              const CreditosMapa(),
             ],
           ),
           // Cabeçalho flutuante

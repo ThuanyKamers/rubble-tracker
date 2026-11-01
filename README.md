@@ -47,7 +47,7 @@ Blocked accounts can be unblocked by the city with `npm run desbloquear-usuario 
 
 | Layer | Technology |
 |---|---|
-| Mobile app | Flutter (Dart), `flutter_map` + OpenStreetMap, `geolocator`, `image_picker` |
+| Mobile app | Flutter (Dart), `flutter_map` + OpenStreetMap (Google Maps, Mapbox, MapTiler, Stadia or HERE via config), `geolocator`, `image_picker` |
 | API | Node.js, Express, JWT authentication, `multer` for photo uploads |
 | Database | PostgreSQL |
 | Infrastructure | Docker Compose (optional) |
@@ -103,6 +103,25 @@ flutter run                                                  # Android emulator 
 flutter run --dart-define=API_URL=http://<your-pc-ip>:3000   # physical device on the same network
 ```
 
+## Map providers
+
+The map is free by default (OpenStreetMap) and can be switched to a commercial provider **without changing code**, just by passing a key at build time. Supported: `google` (Google Map Tiles API), `mapbox`, `maptiler`, `stadia` and `here`.
+
+```bash
+cp config/mapa.example.json config/mapa.json   # fill in MAP_PROVIDER and MAP_API_KEY
+flutter run --dart-define-from-file=config/mapa.json
+```
+
+| Setting | Example | Notes |
+|---|---|---|
+| `MAP_PROVIDER` | `google` | `openstreetmap` (default), `google`, `mapbox`, `maptiler`, `stadia`, `here` |
+| `MAP_API_KEY` | `AIza...` | Without a key the app falls back to OpenStreetMap |
+| `MAP_STYLE` | `roadmap`, `streets-v12` | Optional, provider-specific style |
+
+`config/mapa.json` is git-ignored. Map keys ship inside the app, so restrict them in the provider console to the app's package name / bundle ID and to the map API only. If the Google session fails (invalid key, no internet), the app falls back to OpenStreetMap. Each provider's required attribution is shown in the map corner.
+
+The **Directions** button lets workers pick the navigation app: Google Maps, Waze, Apple Maps (iOS) or any other installed map app (Android). No key is needed for this.
+
 ## API
 
 | Method | Route | Who |
@@ -118,7 +137,7 @@ flutter run --dart-define=API_URL=http://<your-pc-ip>:3000   # physical device o
 ## Before going to production
 
 - Serve the API over HTTPS and remove `android:usesCleartextTraffic="true"`.
-- Use a tile provider suited for production traffic (the free OpenStreetMap tile servers do not allow heavy usage).
+- Use a tile provider suited for production traffic (the free OpenStreetMap tile servers do not allow heavy usage); see [Map providers](#map-providers).
 - Set the official application ID / bundle ID.
 - Store photos in object storage (e.g. S3) instead of the local disk.
 

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -26,15 +27,51 @@ String tempoDesde(DateTime d) {
 String formatarDistancia(double metros) =>
     metros < 1000 ? '${metros.round()} m' : '${(metros / 1000).toStringAsFixed(1)} km';
 
-// Abre a rota até o entulho no Google Maps (ou no navegador).
+// Pergunta em qual aplicativo de navegação abrir a rota até o entulho.
 Future<void> abrirRota(BuildContext context, LatLng destino) async {
-  final url = Uri.parse(
-    'https://www.google.com/maps/dir/?api=1'
-    '&destination=${destino.latitude},${destino.longitude}&travelmode=driving',
+  final lat = destino.latitude;
+  final lng = destino.longitude;
+  final opcoes = <(String, IconData, Uri)>[
+    (
+      'Google Maps',
+      Icons.map_rounded,
+      Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving'),
+    ),
+    ('Waze', Icons.navigation_rounded, Uri.parse('https://waze.com/ul?ll=$lat,$lng&navigate=yes')),
+    if (defaultTargetPlatform == TargetPlatform.iOS)
+      ('Apple Mapas', Icons.apple, Uri.parse('https://maps.apple.com/?daddr=$lat,$lng&dirflg=d')),
+    if (defaultTargetPlatform == TargetPlatform.android)
+      ('Outro aplicativo', Icons.apps_rounded, Uri.parse('geo:$lat,$lng?q=$lat,$lng')),
+  ];
+
+  final escolhida = await showModalBottomSheet<Uri>(
+    context: context,
+    useSafeArea: true,
+    builder: (context) => Padding(
+      padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text('Abrir rota com', style: Theme.of(context).textTheme.titleMedium),
+          ),
+          for (final (nome, icone, url) in opcoes)
+            ListTile(
+              leading: Icon(icone, color: Cores.verde),
+              title: Text(nome),
+              onTap: () => Navigator.pop(context, url),
+            ),
+        ],
+      ),
+    ),
   );
-  final abriu = await launchUrl(url, mode: LaunchMode.externalApplication);
+  if (escolhida == null) return;
+
+  final abriu = await launchUrl(escolhida, mode: LaunchMode.externalApplication);
   if (!abriu && context.mounted) {
-    mostrarAviso(context, 'Não foi possível abrir o mapa.', tipo: TipoAviso.erro);
+    mostrarAviso(context, 'Não foi possível abrir o aplicativo de mapas.', tipo: TipoAviso.erro);
   }
 }
 

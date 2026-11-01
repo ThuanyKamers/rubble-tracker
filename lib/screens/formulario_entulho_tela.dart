@@ -10,6 +10,7 @@ import '../config.dart';
 import '../models/denuncia.dart';
 import '../services/api_service.dart';
 import '../services/localizacao.dart';
+import '../services/mapa_provedor.dart';
 import '../services/sessao.dart';
 import '../theme.dart';
 import '../widgets/foto_entulho.dart';
@@ -463,11 +464,7 @@ class _FormularioEntulhoTelaState extends State<FormularioEntulhoTela> {
                   onMapReady: () => _miniMapaPronto = true,
                 ),
                 children: [
-                  TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.cidadelimpa.app',
-                    maxNativeZoom: 19,
-                  ),
+                  const CamadaMapa(),
                   if (p != null) ...[
                     CircleLayer(
                       circles: [

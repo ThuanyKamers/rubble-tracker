@@ -55,3 +55,6 @@ GoogleService-Info.plist
 
 # Local backups
 _backup*/
+
+# Chaves de mapa (copie config/mapa.example.json para config/mapa.json)
+config/mapa.json
