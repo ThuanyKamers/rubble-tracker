@@ -236,9 +236,10 @@ class _DetalhesDenunciaState extends State<_DetalhesDenuncia> {
           if (denuncia.criadoEm != null)
             _Linha(
               icone: Icons.schedule_rounded,
-              texto:
-                  'Registrado ${tempoDesde(denuncia.criadoEm!)} '
-                  '(${formatarData(denuncia.criadoEm!)})',
+              texto: DateTime.now().difference(denuncia.criadoEm!).inDays < 7
+                  ? 'Registrado ${tempoDesde(denuncia.criadoEm!)} '
+                      '(${formatarData(denuncia.criadoEm!)})'
+                  : 'Registrado em ${formatarData(denuncia.criadoEm!)}',
             ),
           _Linha(
             icone: Icons.groups_rounded,

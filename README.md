@@ -16,6 +16,7 @@ A mobile app (Android & iOS) that connects citizens and city workers to keep str
 **City workers**
 - Have a separate login, created by the city (workers cannot self-register).
 - See every open report on the map, or as a list sorted by distance.
+- Tap **Go to nearest** to get the closest open report from their GPS position and navigate there, or open a Google Maps route through the 9 nearest reports in visiting order. After each collection the app suggests the next nearest one.
 - Mark rubble as **collected**, which removes it from the map for everyone.
 
 ## Precise duplicate detection

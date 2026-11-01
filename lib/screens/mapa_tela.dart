@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../config.dart';
 import '../models/denuncia.dart';
 import '../services/api_service.dart';
 import '../services/localizacao.dart';
 import '../services/mapa_provedor.dart';
+import '../services/rota_coleta.dart';
 import '../services/sessao.dart';
 import '../theme.dart';
 import '../widgets/detalhes_denuncia.dart';
@@ -34,6 +36,7 @@ class _MapaTelaState extends State<MapaTela> {
   bool _mapaPronto = false;
   bool _centralizouNoUsuario = false;
   int? _selecionada;
+  bool _buscandoProximo = false;
   String? _erroGps;
   LatLng? _posicaoUsuario;
   StreamSubscription<Position>? _gps;
@@ -153,6 +156,65 @@ class _MapaTelaState extends State<MapaTela> {
       _selecionada = null;
       if (recolhido) _denuncias.removeWhere((d) => d.id == denuncia.id);
     });
+    // Depois de recolher, já sugere o próximo entulho mais perto.
+    if (recolhido && _ehTrabalhador) _irAoMaisProximo(aposColeta: true);
+  }
+
+  // Busca todos os entulhos abertos e mostra o mais perto do trabalhador,
+  // com a opção de ir até ele ou montar uma rota pelos mais próximos.
+  Future<void> _irAoMaisProximo({bool aposColeta = false}) async {
+    final origem = _posicaoUsuario;
+    if (origem == null) {
+      _iniciarGps();
+      mostrarAviso(context, _erroGps ?? 'Ainda procurando sua localização. Tente de novo em instantes.');
+      return;
+    }
+    if (_buscandoProximo) return;
+
+    setState(() => _buscandoProximo = true);
+    final List<Denuncia> abertos;
+    try {
+      abertos = await ApiService.fetchDenuncias();
+    } on ApiException catch (e) {
+      if (e.sessaoExpirada) return _sair();
+      if (mounted) mostrarAviso(context, e.mensagem, tipo: TipoAviso.erro);
+      return;
+    } finally {
+      if (mounted) setState(() => _buscandoProximo = false);
+    }
+    if (!mounted) return;
+    if (abertos.isEmpty) {
+      mostrarAviso(context, 'Tudo limpo! Não há entulho esperando coleta.', tipo: TipoAviso.sucesso);
+      return;
+    }
+
+    final ordem = ordenarParaColeta(origem, abertos, limite: maxParadasRota);
+    final maisProximo = ordem.first;
+    final acao = await showModalBottomSheet<_AcaoProximo>(
+      context: context,
+      useSafeArea: true,
+      builder: (context) => _PainelMaisProximo(
+        origem: origem,
+        ordem: ordem,
+        total: abertos.length,
+        aposColeta: aposColeta,
+      ),
+    );
+    if (!mounted || acao == null) return;
+
+    switch (acao) {
+      case _AcaoProximo.irAgora:
+        _mapController.move(maisProximo.coordenada, 17);
+        await abrirRota(context, maisProximo.coordenada);
+      case _AcaoProximo.verNoMapa:
+        _mapController.move(maisProximo.coordenada, 18);
+        await _abrirDenuncia(maisProximo);
+      case _AcaoProximo.rotaCompleta:
+        final abriu = await launchUrl(urlRotaGoogleMaps(ordem), mode: LaunchMode.externalApplication);
+        if (!abriu && mounted) {
+          mostrarAviso(context, 'Não foi possível abrir o Google Maps.', tipo: TipoAviso.erro);
+        }
+    }
   }
 
   Future<void> _reportarEntulho() async {
@@ -317,10 +379,28 @@ class _MapaTelaState extends State<MapaTela> {
             right: 16,
             bottom: 24 + rodape,
             child: _ehTrabalhador
-                ? FilledButton.icon(
-                    onPressed: _abrirLista,
-                    icon: const Icon(Icons.format_list_bulleted_rounded),
-                    label: const Text('Ver lista por distância'),
+                ? Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: _buscandoProximo ? null : _irAoMaisProximo,
+                          icon: _buscandoProximo
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                                )
+                              : const Icon(Icons.near_me_rounded),
+                          label: const Text('Ir ao mais próximo'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      _BotaoRedondo(
+                        icone: Icons.format_list_bulleted_rounded,
+                        tooltip: 'Lista por distância',
+                        onTap: _abrirLista,
+                      ),
+                    ],
                   )
                 : FilledButton.icon(
                     onPressed: _reportarEntulho,
@@ -519,6 +599,101 @@ class _BotaoRedondo extends StatelessWidget {
           onTap: onTap,
           child: SizedBox(width: 52, height: 52, child: Icon(icone, color: cor)),
         ),
+      ),
+    );
+  }
+}
+
+enum _AcaoProximo { irAgora, verNoMapa, rotaCompleta }
+
+class _PainelMaisProximo extends StatelessWidget {
+  final LatLng origem;
+  final List<Denuncia> ordem;
+  final int total;
+  final bool aposColeta;
+
+  const _PainelMaisProximo({
+    required this.origem,
+    required this.ordem,
+    required this.total,
+    required this.aposColeta,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final maisProximo = ordem.first;
+    final descricao = maisProximo.pontoReferencia.isEmpty ? 'Sem descrição' : maisProximo.pontoReferencia;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            aposColeta ? 'Próximo entulho' : 'Entulho mais próximo',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Cores.fundo,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 48, height: 56, child: PinoEntulho()),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'a ${formatarDistancia(distanciaAte(origem, maisProximo))} de você',
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Cores.texto),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        descricao,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Cores.textoSuave),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context, _AcaoProximo.irAgora),
+            icon: const Icon(Icons.navigation_rounded),
+            label: const Text('Ir agora'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.pop(context, _AcaoProximo.verNoMapa),
+            icon: const Icon(Icons.photo_library_outlined),
+            label: const Text('Ver fotos e detalhes'),
+          ),
+          if (ordem.length > 1) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => Navigator.pop(context, _AcaoProximo.rotaCompleta),
+              icon: const Icon(Icons.route_rounded),
+              label: Text('Rota pelos ${ordem.length} mais próximos (Google Maps)'),
+            ),
+            Text(
+              total > ordem.length
+                  ? 'Passa pelos ${ordem.length} mais perto, um atrás do outro. Há $total entulhos abertos no total.'
+                  : 'Passa por todos, um atrás do outro, saindo de onde você está.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12.5, color: Cores.textoSuave),
+            ),
+          ],
+        ],
       ),
     );
   }
