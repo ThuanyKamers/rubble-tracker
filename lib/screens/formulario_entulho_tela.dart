@@ -465,6 +465,7 @@ class _FormularioEntulhoTelaState extends State<FormularioEntulhoTela> {
                 ),
                 children: [
                   const CamadaMapa(),
+                  const CreditosMapa(),
                   if (p != null) ...[
                     CircleLayer(
                       circles: [

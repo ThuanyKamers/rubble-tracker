@@ -138,18 +138,34 @@ class _CamadaMapaState extends State<CamadaMapa> {
   }
 }
 
-// Créditos exigidos pelo provedor de mapas, no canto do mapa.
+// Créditos exigidos pelo provedor de mapas, sempre visíveis no canto
+// inferior esquerdo do mapa. [espacoInferior] afasta o texto de botões que
+// ficam por cima do mapa (como o botão principal da tela).
 class CreditosMapa extends StatelessWidget {
-  const CreditosMapa({super.key});
+  final double espacoInferior;
+
+  const CreditosMapa({super.key, this.espacoInferior = 0});
 
   @override
   Widget build(BuildContext context) {
-    return RichAttributionWidget(
-      alignment: AttributionAlignment.bottomLeft,
-      showFlutterMapAttribution: false,
-      attributions: [
-        for (final credito in _creditos(provedorMapa)) TextSourceAttribution(credito),
-      ],
+    return Align(
+      alignment: Alignment.bottomLeft,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: espacoInferior),
+        child: IgnorePointer(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: const BoxDecoration(
+              color: Color(0xCCFFFFFF),
+              borderRadius: BorderRadius.only(topRight: Radius.circular(6), bottomRight: Radius.circular(6)),
+            ),
+            child: Text(
+              _creditos(provedorMapa).join('  '),
+              style: const TextStyle(fontSize: 10, color: Color(0xFF404040)),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

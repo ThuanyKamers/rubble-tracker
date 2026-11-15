@@ -307,7 +307,8 @@ class _MapaTelaState extends State<MapaTela> {
                   ..._denuncias.map(_marcador),
                 ],
               ),
-              const CreditosMapa(),
+              // Logo acima do botão principal (24 de margem + 56 de altura).
+              CreditosMapa(espacoInferior: 86 + rodape),
             ],
           ),
           // Cabeçalho flutuante
