@@ -39,15 +39,6 @@ class PinoEntulho extends StatelessWidget {
             ),
           ),
           const Icon(Icons.location_on, size: 56, color: Cores.entulho),
-          Positioned(
-            top: 9,
-            child: Container(
-              width: 26,
-              height: 26,
-              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-              child: const Icon(Icons.delete_outline_rounded, size: 18, color: Cores.entulho),
-            ),
-          ),
           if (confirmacoes > 1)
             Positioned(
               right: -2,
