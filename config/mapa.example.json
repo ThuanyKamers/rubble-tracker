@@ -1,5 +1,5 @@
 {
-  "MAP_PROVIDER": "google",
+  "MAP_PROVIDER": "maptiler",
   "MAP_API_KEY": "cole-aqui-a-sua-chave",
-  "MAP_STYLE": ""
+  "MAP_STYLE": "streets-v2"
 }
