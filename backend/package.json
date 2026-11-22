@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env src/index.js",
     "criar-trabalhador": "node --env-file-if-exists=.env src/criar-trabalhador.js",
-    "desbloquear-usuario": "node --env-file-if-exists=.env src/desbloquear-usuario.js"
+    "desbloquear-usuario": "node --env-file-if-exists=.env src/desbloquear-usuario.js",
+    "test": "node --test"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
