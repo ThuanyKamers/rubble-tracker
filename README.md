@@ -1,5 +1,7 @@
 # Rubble Tracker
 
+[![CI](https://github.com/ThuanyKamers/rubble-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/ThuanyKamers/rubble-tracker/actions/workflows/ci.yml)
+
 A mobile app (Android & iOS) that connects citizens and city workers to keep streets free of construction debris and discarded rubble. Built as a proposal for the city of **Palhoça (SC, Brazil)**.
 
 > The app interface is in Brazilian Portuguese ("Cidade Limpa").
@@ -122,6 +124,15 @@ flutter run --dart-define-from-file=config/mapa.json
 `config/mapa.json` is git-ignored. Map keys ship inside the app, so restrict them in the provider console to the app's package name / bundle ID and to the map API only. If the Google session fails (invalid key, no internet), the app falls back to OpenStreetMap. Each provider's required attribution is shown in the map corner.
 
 The **Directions** button lets workers pick the navigation app: Google Maps, Waze, Apple Maps (iOS) or any other installed map app (Android). No key is needed for this.
+
+## Tests
+
+```bash
+flutter test            # app: CPF check, intro screen, collection route
+cd backend && npm test  # API: CPF validation, distance and duplicate radius
+```
+
+Both run automatically on GitHub for every push.
 
 ## API
 
