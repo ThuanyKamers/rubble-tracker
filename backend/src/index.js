@@ -102,6 +102,7 @@ const SELECT_DENUNCIA = `
          d.precisao_m,
          d.criado_em,
          d.recolhido_em,
+         d.descartado_em,
          GREATEST((SELECT count(*) FROM registros r WHERE r.denuncia_id = d.id), 1)::int AS confirmacoes,
          COALESCE((SELECT json_agg('/uploads/' || f.arquivo ORDER BY f.id)
                    FROM fotos f WHERE f.denuncia_id = d.id), '[]'::json) AS fotos,
@@ -299,6 +300,19 @@ app.get('/denuncias', exigirLogin, rota(async (req, res) => {
   const { rows } = await pool.query(
     `${SELECT_DENUNCIA} ${filtro} ORDER BY d.id DESC LIMIT 500`,
     valores,
+  );
+  res.json(rows.map(formatarDenuncia));
+}));
+
+// Entulhos que o cidadão registrou ou confirmou, com a situação de cada um
+// (aguardando coleta, recolhido ou não encontrado pela equipe).
+app.get('/denuncias/minhas', exigirLogin, exigirPerfil('cidadao'), rota(async (req, res) => {
+  const { rows } = await pool.query(
+    `${SELECT_DENUNCIA}
+     JOIN registros meu ON meu.denuncia_id = d.id AND meu.usuario_id = $1
+     ORDER BY meu.criado_em DESC
+     LIMIT 200`,
+    [req.usuario.id],
   );
   res.json(rows.map(formatarDenuncia));
 }));

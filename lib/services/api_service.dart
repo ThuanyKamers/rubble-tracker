@@ -118,6 +118,15 @@ class ApiService {
     return lista.map((e) => Denuncia.fromJson(e as Map<String, dynamic>)).toList();
   });
 
+  // Entulhos que o cidadão logado registrou ou confirmou, do mais recente ao mais antigo.
+  static Future<List<Denuncia>> fetchMeusRegistros() => _comConexao(() async {
+    final response = await http
+        .get(Uri.parse('$apiUrl/denuncias/minhas'), headers: _headers)
+        .timeout(_timeout);
+    final lista = _tratar(response) as List;
+    return lista.map((e) => Denuncia.fromJson(e as Map<String, dynamic>)).toList();
+  });
+
   // Registra um entulho. Se já houver um muito perto, lança ApiException com
   // codigo ENTULHO_PROXIMO e a lista em dados['candidatos'].
   static Future<ResultadoRegistro> criarDenuncia({

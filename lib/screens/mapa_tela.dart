@@ -19,6 +19,7 @@ import '../widgets/pino_mapa.dart';
 import 'formulario_entulho_tela.dart';
 import 'lista_denuncias_tela.dart';
 import 'login_tela.dart';
+import 'meus_registros_tela.dart';
 
 class MapaTela extends StatefulWidget {
   const MapaTela({super.key});
@@ -236,6 +237,14 @@ class _MapaTelaState extends State<MapaTela> {
     _atualizarDenunciasDaArea();
   }
 
+  Future<void> _abrirMeusRegistros() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MeusRegistrosTela()),
+    );
+    _atualizarDenunciasDaArea();
+  }
+
   void _irParaMinhaLocalizacao() {
     if (_posicaoUsuario != null) {
       _mapController.move(_posicaoUsuario!, 17);
@@ -403,10 +412,22 @@ class _MapaTelaState extends State<MapaTela> {
                       ),
                     ],
                   )
-                : FilledButton.icon(
-                    onPressed: _reportarEntulho,
-                    icon: const Icon(Icons.add_a_photo_rounded),
-                    label: const Text('Reportar entulho'),
+                : Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: _reportarEntulho,
+                          icon: const Icon(Icons.add_a_photo_rounded),
+                          label: const Text('Reportar entulho'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      _BotaoRedondo(
+                        icone: Icons.history_rounded,
+                        tooltip: 'Meus registros',
+                        onTap: _abrirMeusRegistros,
+                      ),
+                    ],
                   ),
           ),
         ],

@@ -14,6 +14,7 @@ A mobile app (Android & iOS) that connects citizens and city workers to keep str
 - Sign up with their CPF (Brazilian tax ID) and a password.
 - Report rubble with **1 to 3 photos**, taken with the camera or chosen from the gallery, and an optional description such as *"in front of the dollar store"*.
 - The report is pinned on the map at the **exact GPS position** where it was made.
+- Follow their reports in **My reports**: waiting for collection, collected, or not found by the team.
 
 **City workers**
 - Have a separate login, created by the city (workers cannot self-register).
@@ -141,6 +142,7 @@ Both run automatically on GitHub for every push.
 | `POST` | `/auth/cadastro` | citizen sign-up |
 | `POST` | `/auth/login` | everyone |
 | `GET` | `/denuncias?minLat&maxLat&minLng&maxLng` | logged in |
+| `GET` | `/denuncias/minhas` | citizen (own reports and their status) |
 | `POST` | `/denuncias` (multipart, 1–3 photos) | citizen |
 | `POST` | `/denuncias/:id/confirmar` | citizen |
 | `PATCH` | `/denuncias/:id/recolher` | worker |

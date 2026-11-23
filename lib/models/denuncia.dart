@@ -10,6 +10,7 @@ class Denuncia {
   final String status;
   final int confirmacoes;
   final DateTime? criadoEm;
+  final DateTime? recolhidoEm;
   final double? distanciaM;
 
   Denuncia({
@@ -20,10 +21,13 @@ class Denuncia {
     this.status = 'ativo',
     this.confirmacoes = 1,
     this.criadoEm,
+    this.recolhidoEm,
     this.distanciaM,
   });
 
   bool get recolhida => status == 'recolhido';
+  // O trabalhador foi ao local e não encontrou o entulho.
+  bool get descartada => status == 'descartado';
 
   factory Denuncia.fromJson(Map<String, dynamic> json) {
     final fotos = (json['fotos'] as List? ?? const [])
@@ -43,6 +47,7 @@ class Denuncia {
       status: (json['status'] as String?) ?? 'ativo',
       confirmacoes: (json['confirmacoes'] as int?) ?? 1,
       criadoEm: DateTime.tryParse(json['criado_em']?.toString() ?? '')?.toLocal(),
+      recolhidoEm: DateTime.tryParse(json['recolhido_em']?.toString() ?? '')?.toLocal(),
       distanciaM: (json['distancia_m'] as num?)?.toDouble(),
     );
   }
