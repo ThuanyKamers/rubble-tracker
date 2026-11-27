@@ -317,6 +317,24 @@ app.get('/denuncias/minhas', exigirLogin, exigirPerfil('cidadao'), rota(async (r
   res.json(rows.map(formatarDenuncia));
 }));
 
+// Números para a equipe e a prefeitura: entulhos abertos, recolhidos,
+// não encontrados e tempo médio entre o registro e a coleta.
+app.get('/estatisticas', exigirLogin, exigirPerfil('trabalhador'), rota(async (req, res) => {
+  const { rows: [geral] } = await pool.query(`
+    SELECT count(*) FILTER (WHERE status = 'ativo')::int AS abertos,
+           count(*) FILTER (WHERE status = 'recolhido')::int AS recolhidos,
+           count(*) FILTER (WHERE status = 'descartado')::int AS nao_encontrados,
+           count(*) FILTER (WHERE status = 'recolhido'
+                              AND recolhido_em >= now() - interval '7 days')::int AS recolhidos_7_dias,
+           round(avg(extract(epoch FROM recolhido_em - criado_em) / 3600)
+                 FILTER (WHERE status = 'recolhido' AND recolhido_em IS NOT NULL)::numeric, 1)::float8
+             AS horas_media_coleta,
+           min(criado_em) FILTER (WHERE status = 'ativo') AS aberto_mais_antigo_em
+    FROM denuncias
+  `);
+  res.json(geral);
+}));
+
 // Novo registro de entulho (multipart: latitude, longitude, precisao_m,
 // ponto_referencia, forcar_novo e de 1 a 3 arquivos no campo "fotos").
 app.post('/denuncias', exigirLogin, exigirPerfil('cidadao'), upload.array('fotos', MAX_FOTOS),

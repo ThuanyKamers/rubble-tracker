@@ -147,6 +147,7 @@ Both run automatically on GitHub for every push.
 | `POST` | `/denuncias/:id/confirmar` | citizen |
 | `PATCH` | `/denuncias/:id/recolher` | worker |
 | `PATCH` | `/denuncias/:id/descartar` | worker (false report) |
+| `GET` | `/estatisticas` | worker (open, collected and not-found counts, average hours to collect) |
 
 ## Before going to production
 
